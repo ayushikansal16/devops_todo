@@ -21,13 +21,27 @@ jobs:
     - name: Deploy to EC2
       run: |
         ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-        set -e
+        # Navigate to the deployment directory
+        mkdir -p ~/docker-app
         cd ~/docker-app
+
+        # Stop and remove the current containers
         docker-compose down
+
+        # Clean up old files
         rm -rf *
-        exit
+
+        # Exit from SSH session
         EOF
 
-        scp -r -o StrictHostKeyChecking=no docker-compose.yml ec2-user:/~/docker-deployment 
+        # Upload new Docker Compose files to the EC2 instance
+        scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/docker-app/
+
+        # Run Docker Compose to deploy the updated application
+        ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+        cd ~/docker-app
+
+        # Pull updated images and restart containers
+        docker-compose pull
+        docker-compose up -d
         EOF
-        
