@@ -1,0 +1,33 @@
+name: Docker Compose Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install SSH Key
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Deploy to EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+        set -e
+        cd ~/docker-app
+        docker-compose down
+        rm -rf *
+        exit
+        EOF
+
+        scp -r -o StrictHostKeyChecking=no docker-compose.yml ec2-user:/~/docker-deployment 
+        EOF
+        
