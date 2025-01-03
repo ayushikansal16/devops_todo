@@ -1,47 +1,79 @@
-name: Docker Compose Deploy
+name: Todo-cicd-app
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  deploy:
+  Build_and_Deploy:
     runs-on: ubuntu-latest
 
     steps:
+    # Step 1: Check out the repository
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Install SSH Key
-      uses: webfactory/ssh-agent@v0.5.3
+    # Step 2: Log in to Docker Hub
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
       with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Deploy to EC2
+
+    # Step 3: Build the Docker image
+    - name: Build Docker image
+      env: 
+         IMAGE_TAG : ${{ github.sha }}
       run: |
-        ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-        # Navigate to the deployment directory
-        mkdir -p ~/docker-app
-        cd ~/docker-app
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/task-app:${IMAGE_TAG} .
 
-        # Stop and remove the current containers
-        docker-compose down
 
-        # Clean up old files
-        rm -rf *
+    # Step 4: Push the Docker image to Docker Hub
+    - name: Push Docker image
+      env: 
+         IMAGE_TAG : ${{ github.sha }}
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/task-app:${IMAGE_TAG}
 
-        # Exit from SSH session
-        EOF
+        
+    # Step 5: updating the new image to docker-compose file
+    - name: update image tag in docker-compose file
+      env: 
+         IMAGE_TAG: ${{ github.sha }}
+         IMAGE_NAME: "dumalbhaskar/task-app"
+         
+      run: |
+            git config --global user.email "ayushikansal168@gmail.com"
+            git config --global user.name "ayushi kansal"
+            sed -i "s|image:.*|image: $IMAGE_NAME:$IMAGE_TAG|g" docker-compose.yaml
+            git add . 
+            git commit -m "updating the new image tag"
+            git push 
+                     
 
-        # Upload new Docker Compose files to the EC2 instance
-        scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/docker-app/
+    # Step 6: Transfer files to the EC2 instance
+    - name: Copy files to EC2
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        source: "docker-compose.yaml"
+        target: "/home/${{ secrets.SERVER_USER }}/todo-app/"
 
-        # Run Docker Compose to deploy the updated application
-        ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-        cd ~/docker-app
 
-        # Pull updated images and restart containers
-        docker-compose pull
-        docker-compose up -d
-        EOF
+    # Step 7: SSH into the EC2 instance and deploy
+    - name: Deploy using docker-compose on EC2
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /home/${{ secrets.SERVER_USER }}/todo-app/
+          docker-compose down
+          docker-compose pull
+          docker-compose up -d
