@@ -4,6 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: ayushikansal168/node-app:latest
     ports:
       - "3000:3333"
     container_name: node-app
