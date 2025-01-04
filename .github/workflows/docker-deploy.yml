@@ -53,6 +53,9 @@ jobs:
         aws ssm send-command \
           --document-name "AWS-RunShellScript" \
           --targets "Key=instanceIds,Values=$INSTANCE_ID" \
-          --parameters "commands=$COMMAND" \
+          --parameters "commands=[$COMMAND]" \
           --comment "Deploy updated Docker Compose application" \
-          --region ${{ secrets.AWS_REGION }}
+          --region ${{ secrets.AWS_REGION }} \
+          --query 'Command.CommandId' --output text
+
+          echo "command_id=$command_id" >> $GITHUB_ENV
