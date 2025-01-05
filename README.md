@@ -33,3 +33,4 @@ adonis migration:run
 ### Run the server
 
 Run the following command to run sever `npm start`
+- `npm start`
